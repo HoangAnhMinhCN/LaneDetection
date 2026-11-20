@@ -27,6 +27,8 @@ class LaneDetector:
         self.left = None               # (a, b): x = a*y + b
         self.right = None
         self.vp_y = None               # smoothed horizon / vanishing point y
+        self.left_observed = False    # accepted new evidence in the current frame
+        self.right_observed = False
 
     # ---- 1. paint mask: thin bright stripes (white) or yellow ---------------
     @staticmethod
@@ -94,8 +96,8 @@ class LaneDetector:
                 elif a > 0 and x_bot > 0.5 * w:
                     right.append((a, b, length, x_bot))
 
-        self.left = self._fit(self.left, left, h)
-        self.right = self._fit(self.right, right, h)
+        self.left = self._fit(self.left, left, h, "left")
+        self.right = self._fit(self.right, right, h, "right")
 
         # vanishing point = intersection of the two lines
         if self.left and self.right and abs(self.left[0] - self.right[0]) > 1e-3:
@@ -103,7 +105,8 @@ class LaneDetector:
             if 0.3 * h < y < 0.95 * h:
                 self.vp_y = y if self.vp_y is None else 0.9 * self.vp_y + 0.1 * y
 
-    def _fit(self, prev, segs, h):
+    def _fit(self, prev, segs, h, side):
+        setattr(self, f"{side}_observed", False)
         if not segs:
             return prev
         arr = np.array(segs)
@@ -117,6 +120,7 @@ class LaneDetector:
             keep &= np.abs(arr[:, 3] - prev_bot) < 0.25 * h * 2
         if keep.sum() == 0:
             return prev
+        setattr(self, f"{side}_observed", True)
         arr = arr[keep]
         w = arr[:, 2]
         fit = (np.average(arr[:, 0], weights=w), np.average(arr[:, 1], weights=w))
